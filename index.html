@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Graduation Seating Lookup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    h1 {
+      color: #8b0000;
+      margin-bottom: 8px;
+    }
+    p.subtitle {
+      color: #555;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    .disclaimer {
+      background: #fff8e1;
+      border-left: 4px solid #f9a825;
+      color: #555;
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 4px;
+      max-width: 500px;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .search-box {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      max-width: 500px;
+      margin-bottom: 24px;
+    }
+    input {
+      flex: 1;
+      padding: 10px 14px;
+      font-size: 16px;
+      border: 2px solid #ccc;
+      border-radius: 6px;
+      outline: none;
+    }
+    input:focus { border-color: #8b0000; }
+    button {
+      padding: 10px 20px;
+      background: #8b0000;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover { background: #a00000; }
+
+    .suggestions {
+      width: 100%;
+      max-width: 500px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      margin-top: -20px;
+      margin-bottom: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .suggestion-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+    .suggestion-item:hover { background: #f0f0f0; }
+
+    .result-card {
+      background: white;
+      border-radius: 10px;
+      padding: 24px;
+      width: 100%;
+      max-width: 500px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .result-card h2 {
+      color: #8b0000;
+      margin-bottom: 4px;
+    }
+    .seat-info {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 20px;
+    }
+    .neighbors-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      text-align: center;
+    }
+    .neighbor-box {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 12px 8px;
+    }
+    .neighbor-box.you {
+      background: #fff3f3;
+      border-color: #8b0000;
+    }
+    .neighbor-box .label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .neighbor-box .name {
+      font-size: 13px;
+      font-weight: bold;
+      color: #333;
+    }
+    .neighbor-box.you .name { color: #8b0000; }
+    .empty-cell { visibility: hidden; }
+
+    .error {
+      color: #8b0000;
+      font-size: 15px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🎓 Graduation Seating Lookup</h1>
+<p class="subtitle">Type your name to find your seat and neighbors</p>
+<p class="disclaimer">⚠️ The students shown <strong>to your left and right</strong> are based on
+  alphabetical order and should be accurate. The students shown
+  <strong>in front of and behind you</strong> are predictions only, based on the
+  seating chart image provided for graduation practice and may not reflect the
+  final arrangement.</p>
+
+<div class="search-box">
+  <input type="text" id="searchInput" placeholder="Enter your name..." autocomplete="off" />
+  <button onclick="search()">Find</button>
+</div>
+<div class="suggestions" id="suggestions" style="display:none;"></div>
+<div id="result"></div>
+
+<script>
+const SEATS_PER_ROW = 44;
+
+const students = [
+  "Ayah Abdelgader","Madalynne Aberg","Santiago Adame Chavarria",
+  "Makyah Adams","Nyier Adams","Aubrey Aenchbacher","Carson Agner",
+  "Kai Aldridge","Declan Alwine","Zane Amer","Nihir Amin",
+  "Jaylah Anderson","Zamaria Anderson","Ethan Andrews","Isaac Louie Andrews",
+  "Chandler Anthony","Johan Arreola-Castro","Ryanne Arrington",
+  "Jamaira Arroyo","Elimer Artiles Cueto","Lincoln Ashmore",
+  "Zachary Baden","Jaeden Bailey","Ashlyn Baker","William Baldwin",
+  "Riley Bale","Isaiah Ballard","Kristiana Barefield","Jordan Barksdale",
+  "Kaelynn Barnes","Samantha Barrera Perez","Sofia Anita Baxter",
+  "Rori Bays","Kailey Becker","Mason Beneke","Sirinda Benoit",
+  "Jack Benton","Sah'nyra Bethea","Caden Bierman","Brianna Bill",
+  "Amaya Biyo","Hayley Black","Deena Joy Blackwell Jones","Julia Blumberg",
+  "Jashayla Bonner","Marcus Boone","Madyson Bostic","Elana Boston",
+  "Allyssa Boyce","Rommie Boyd","Tremail Boyd","Jayla Braddy",
+  "Carson Bradford","Rowan Brenes","Sara Brigham","Maddison Brister-Wesley",
+  "Judah Brogan","Thomas Brookins","Alexandria Brooks","Damien Brooks",
+  "Jackson Brooks","Trinity Brooks","Amari Brown","Ashlyn Brown",
+  "Clinton Brown","Ethan Brown","Jahdea Brown","Jeyda Brown",
+  "Keeley Brown","Nathan Brown","Sasha Brown","Chase Browne",
+  "Sanai Brunswick","Adrian Burns","Angelise Burns","Iyonna Burns",
+  "Jayden Burris","Blessin Bussey","Destiny Butler","Justice Byrne",
+  "Ka'miyah Calloway","Maddisson Caress","Alyssa Carpenter",
+  "Bianca Carranza Cabrera","Curtis Carrington","Nelson Cartagena",
+  "Alma Carter","Ambreal Carter","Mason Carter","Dasia Caster",
+  "Kayli Castro-Joachin","Emma Cato","Jordan Cavalier","Roberto Ceballos",
+  "Britney Chacon Orellana","Anya Chambers","Aidan Chinn","Jonathan Cobb",
+  "Garrett Coker","Jeremiah Cole","Zachary Colon","Caitlynn Connally",
+  "Hunter Copeland","Zoie Copeland","Fernando Coral","Alaura Cox",
+  "Julius Craig","Mackenzie Craig","Jasmine Crawford","Hannah Cuenca",
+  "Jamison Dallier","Kato Daniel","Kimora Daniels","Jake Daum",
+  "Gaven Davis","Gregory Davis","Hannah Davis","Rylan Davis",
+  "Jordan DeBose","Julia Delauney","Kayleigh Delgado","Derek DeMott",
+  "Logan DeMott","Patrick Denson","Emery Dent","Maliyah Dent",
+  "Xavier DeRamus","Sean DeRoche","Ailani Detwyler","Armann Docteur",
+  "Yu Dong","Keishaun Drayton","Logan Dubay-Stickley","Adam Duncan",
+  "JaMarcus Duncan","Ethan Dunlap","Carter Eagler","Emilie Ebinal",
+  "Rodney Edmond","Kendal Edmunds","Chandler Egan","Mackenzie Egan",
+  "Jhair Elias-Mezquite","Bryce Enoch","Tiffany Escobar","Sophia Espinoza",
+  "Cristian Espinoza-Eckert","Ella-Marie Etienne","Kendyl Faulk",
+  "Khloe Faulk","Tremell Fauntleroy","Kimora Ferguson","Rachele Ferons",
+  "Andrea Fields","Evan Fisher","Javan Flores","Paris Floyd",
+  "Mariana Fonseca","Kenyatta Foston","Nathan Fowler","Amy Fox",
+  "Autumn Frankson","Mariah Freeman","Hailey Fritz","Jada Fulbright",
+  "Kira Fuller","Giana Gabriel","Roman Gandy","Jesus Garces Noel",
+  "Lillian Garner","Jaelynn Gaskins","Ashleigh Gensinger","Zayne Geraghty",
+  "Eleia German","Brandon Gibson","Robert Gilbert","Kailey Giles",
+  "Jacari Gilliams","McKenzie Goeddel","Kamryn Gooden","Ray'Niyah Goolsby",
+  "Cameron Graham","Janessa Graham","Nohelia Graham","Ayanna Grant",
+  "Latonia Grant","Rylan Grant","Xavier Graves","Dennis Gray",
+  "Jayeda Green","Hezekiah Greer","Joselyn Guerrero-Maguey",
+  "Taylor Guglielmetti","Galilea Guillen","Nathan Guler","Jessica Hahn",
+  "Jayla Hall-El","Marcus Halvorson","Jayce Hamilton","Dylan Hannah",
+  "Donavon Hardy","Tucker Harper","Rachel Harris","Myliegh Hart",
+  "Noah Hartigan","Adam Harvey","Andrew Hasbrouck","Mason Hawkes",
+  "Holley Haworth","Brittany Hayes","Rodrick Haynes","Isaac Heaton",
+  "Sierra Henchel","Aeva Hendrieth","Emma Henshaw","Koral Henson",
+  "Mayson Hentges","Savannah Herchig","Luis Hernandez","Marissa Herrera",
+  "Jayden Hester","Jaiyah Hill","Matthew Hilton","Isaiah Hoeller",
+  "Amant'i Holland","Taaliyah Hollins","Jennifer Horne","Ryley Howard",
+  "Katelyn Hoy","Gabriel Hunter","Shaylen Hunter","Bahram Huseyin",
+  "Damian Hutchinson","Ariana Hutson","Nada Idris","Isabel Inks",
+  "Scott Inks","McKenca Irons","Aleaha Isaac","Makya Isham","Jaquez Ivey",
+  "Andrew Jackson","Jaylin Jackson","Kaitlyn Jackson","Kory Jackson",
+  "Kyler Jackson","Jowell Jackson-Henriquez","William Jarrett",
+  "Aamir Jenkins","Elijah Jenkins","Samir Jenkins","Jaylen Jenkins-Vega",
+  "Alyricah Johnson","Aniyah Johnson","Chase Johnson","Cheyenne Johnson",
+  "Crista Johnson","Inara Johnson","Kylie Johnson","Samiyah Johnson",
+  "Tyra Johnson","Katie Jones","Khaniya Jones","Rebecka Jones",
+  "Travion Jones","Josiah Keaton","Keimara Kelley","Terrence Kelly",
+  "Kadence Kerstetter","Eshan Khan","Maylin Kim","Tayler Kittles",
+  "Peniel Koudou","Jordyn Krog","Sofiya Kulyna","Dallas Lane",
+  "Dereon Lane","Derrick Lane","John Lane","Savannah Lapine",
+  "Amani LaPradd","Noah Latta","Mykerah Lawrence","Zah'rya Lawson",
+  "Steven Le","Quest Leach","Malcolm Leake","Antonio Leal","Alyssa Lee",
+  "Symphony LeGrant","Elijah Lemeuble","Gwyneth Lesner","Micah Leverette",
+  "Malayah Lewis","Micah Lopez","Jordan Lott","Adrian Love","Jordyn Lowe",
+  "Shelby Loy","Mariah Mack","Sa'Vionne Mack","Sani Mahamane-Laouali",
+  "Jake Maldonado","Jamil Manou","Leydi Marquez-Espino","Aminah Martin",
+  "Jaylin Martin","Kayla Martin","Natalie Martin","Adrian Martinez",
+  "Alberto Martinez Hernandez","Lyz Martinez","Dayris Martinez-Alvarez",
+  "Lauren Maxwell","Myeshia McBride","Aniyah McClady","Owen McClellan",
+  "Adalyn McCully","AriJ'ana McDaniel","Shaniyah McDaniel",
+  "Matthew McKinney","Jaidis McNeal","Richard McQueen","Carson Mejias",
+  "Benicio Melendez","Alanna Melendez-Grubb","Jayden Melick-Schulz",
+  "Maribelle Mellnick","Brianna Mendes","Zian Mercer","Micah Merritt",
+  "Anna Metts","Daisy Mezquite","Davon Middleton","Makayla Miles",
+  "Nikira Miller","Nikolaus Miller","Samia Miller","Amiya Mims",
+  "Desiree Mingo","Diamond Mitchell","Jayden Moore","Kimberly Moreno",
+  "Luis Morillo Huerta","Kaleb Morisette","Bailey Morse","Courtney Moss",
+  "Amariana Mott","Caroline Munford","Jahaziel Muse","Bailee Naff",
+  "Kinlee Naff","Juan Natal","Elizabeth Navarro Montiel",
+  "Demi Nazario Montijo","Alexander Neely","Franklin Neely",
+  "Joshua Nelson","Makenzie Nesmith","An Nguyen","Nea Nguyen",
+  "Alexis O'Neal","Bryson O'Neal","Logan Obert","Daniel Onoh",
+  "Evan Ortiz","Jaylee Overton","Christian Pablo Cruz","Abigail Paladino",
+  "Seth Parker","Brianna Patrick","Kendall Patterson","William Patton",
+  "Micah Paylor","Mackenzie Pena","Yaritza Perez Ruiz","Branden Perry",
+  "Frenchy Beatrice Petrosyants","Kyler Phillips","Mya Picart","Katie Pike",
+  "Jada Poleate","Jaren Wayne Polivick","Darian Postell","Aubrey Pough",
+  "Hudson Prescott","Tiana Prince","Amare Pryce","Jayden Purifoy",
+  "Adrian Rabsatt","Josiah Raider","Briana Ratchel","Sofia Ratchel",
+  "Ciel Reaves","Kennedy Reece","Wyatt Reid","Amiyah Reliford",
+  "Jalyn Rentz","Emily Renzelmann","Brinley Reynolds","Jaidyn Rhines",
+  "Nolan Richards","Christian Richey","Jaworski Ricks","Noah Riggs",
+  "Luis Rivera","Xari Rivers-Gillard","Madison Roberts","Mariah Robinson",
+  "Crystal Rodriguez","Jadiel Rodriguez","Marangely Rodriguez",
+  "Camila Rodriguez Nieves","Alyson Rogers","Abraham Rojas","Boston Rowan",
+  "Christopher Royal II","Giovanni Ruiz-Toro","Brooklenn Russell",
+  "Alejandro Salas","Caden Sallee","Domenic Sanders","Jocelyn Sankey",
+  "David Schmidt","Anneliese Schmoll","Aliyah Scrivener","Lai'la Searcy",
+  "Knie'Asha Seavers","Scarlett Sekula","Josalyn Sergent","Maryah Seward",
+  "Abigail Shannon","Clarence Shuler","Tyriah Siler","Ariana Simpson",
+  "Emily Simpson","Leila Sinkler","Amelia Sizemore","Kamyah Slappy",
+  "Hollisten Smilie-Cisneros","Angelina Smith","Jabari Smith",
+  "Kaliyah Smith","Logan Smith","Preston Smith","Saniya Smith",
+  "Victor Smith","Jazaria Smith-Wilkerson","Noah Sparks","Bradley Speese",
+  "James Spencer","Ella Srock","Jayda Stallings","Olivia Stallman",
+  "Lydia Staten","Kiera Steen","Jonathan Stephens","Magnum Stevens",
+  "Carolyn Stewart","Khamyra Stokes","Brandon Story","Bryan Story",
+  "Treasure Story","Corran Stripling","Khalissa Tanimoun","Kaitlin Tansiel",
+  "Colin Tate","Sebastian Tatis Santos","Alexandria Taylor","Jayana Taylor",
+  "Ryan Taylor","Gregory Axel Tegang","Sariyah Thomas","Madelyn Toelle",
+  "Stephen Toussaint","Cody Tremble","Chezney Umble","Elijah Underwood",
+  "Naia Uribe Mejia","Amaryon Vickers","Lachlan Vickers","Alexandra Virtue",
+  "Audrey Voss","Christine Wagner","Henry Wahl","Kiara Ward","Tyler Warner",
+  "Landen Warren","Ahnia Washington","Ariana Washington","Caden Washington",
+  "Rebekah Watson","Dakota Webb","Isaac Wells","Kennedy Whittington",
+  "Abigail Widener","Kimberly Wilkerson","Jai den Wilkins","Calvin Williams",
+  "Cassandra-Marie Williams","Dontiel Williams","Kinnidi Williams",
+  "Lillian Williams","Madison Williams","Mayson Williams","Ne mah Williams",
+  "Samantha Williamson","Ella Willingham","Aubrey Willis","Chyenne Willis",
+  "Tyler Willis","Cienna Wilson","Damien Wilson","Hollis Wilson",
+  "Madison Wintrode","Charleigh Wise","Darya Wnorowski","Kennedy Wong",
+  "Abbi Woodard","Jaylen Woodson","Ahmir Wright","Iman Wright",
+  "Keira Wright","Cynthia Young","K'ylin Young","Ja'lyn Young-Bulluck",
+  "Armaan Zapalmal"
+];
+
+function getSeatInfo(index) {
+  const row = Math.floor(index / SEATS_PER_ROW) + 1;
+  const col = (index % SEATS_PER_ROW) + 1;
+  return { row, col };
+}
+
+function getNeighbor(index, offset) {
+  const i = index + offset;
+  if (i < 0 || i >= students.length) return null;
+  const cur = getSeatInfo(index);
+  const neighbor = getSeatInfo(i);
+  if (offset === -1 || offset === 1) {
+    if (cur.row !== neighbor.row) return null;
+  }
+  return students[i];
+}
+
+function search() {
+  const query = document.getElementById("searchInput").value.trim().toLowerCase();
+  document.getElementById("suggestions").style.display = "none";
+  const result = document.getElementById("result");
+
+  if (!query) {
+    result.innerHTML = '<p class="error">Please enter a name.</p>';
+    return;
+  }
+
+  const index = students.findIndex(
+    s => s.toLowerCase() === query
+  );
+
+  if (index === -1) {
+    result.innerHTML = '<p class="error">Name not found. Try typing more of your name in the search box.</p>';
+    return;
+  }
+
+  showResult(index);
+}
+
+function showResult(index) {
+  const name = students[index];
+  const { row, col } = getSeatInfo(index);
+
+  const left = getNeighbor(index, -1);
+  const right = getNeighbor(index, 1);
+  const front = getNeighbor(index, -SEATS_PER_ROW);
+  const behind = getNeighbor(index, SEATS_PER_ROW);
+
+  function box(label, n, isYou = false) {
+    if (n === null) {
+      return `<div class="neighbor-box" style="background:#fafafa;border-color:#eee;">
+        <div class="label">${label}</div>
+        <div class="name" style="color:#ccc;">—</div>
+      </div>`;
+    }
+    return `<div class="neighbor-box${isYou ? " you" : ""}">
+      <div class="label">${label}</div>
+      <div class="name">${n}</div>
+    </div>`;
+  }
+
+  document.getElementById("result").innerHTML = `
+    <div class="result-card">
+      <h2>${name}</h2>
+      <p class="seat-info">Row ${row}, Seat ${col} &nbsp;·&nbsp; Seat #${index + 1} of ${students.length}</p>
+      <div class="neighbors-grid">
+        <div class="empty-cell"></div>
+        ${box("In Front", front)}
+        <div class="empty-cell"></div>
+        ${box("To Your Left", left)}
+        ${box("You", name, true)}
+        ${box("To Your Right", right)}
+        <div class="empty-cell"></div>
+        ${box("Behind You", behind)}
+        <div class="empty-cell"></div>
+      </div>
+    </div>
+  `;
+}
+
+// Live suggestions
+document.getElementById("searchInput").addEventListener("input", function () {
+  const query = this.value.trim().toLowerCase();
+  const sugBox = document.getElementById("suggestions");
+
+  if (query.length < 2) {
+    sugBox.style.display = "none";
+    return;
+  }
+
+  const matches = students.filter(s => s.toLowerCase().includes(query)).slice(0, 8);
+
+  if (matches.length === 0) {
+    sugBox.style.display = "none";
+    return;
+  }
+
+  sugBox.innerHTML = matches.map(m =>
+    `<div class="suggestion-item" onclick="selectSuggestion('${m.replace(/'/g, "\\'")}')">${m}</div>`
+  ).join("");
+  sugBox.style.display = "block";
+});
+
+function selectSuggestion(name) {
+  document.getElementById("searchInput").value = name;
+  document.getElementById("suggestions").style.display = "none";
+  const index = students.indexOf(name);
+  if (index !== -1) showResult(index);
+}
+
+document.getElementById("searchInput").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") search();
+});
+</script>
+</body>
+</html>
